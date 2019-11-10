@@ -1,0 +1,70 @@
+GET Request Sample:
+================================================================================================================
+GET /get?course=networking&assignment=1 HTTP/1.0
+Host: localhost
+Content-Type:application/json
+
+HTTP/1.1 200 OK
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Origin: *
+Content-Type: application/json
+Date: Thu, 24 Oct 2019 00:45:37 GMT
+Referrer-Policy: no-referrer-when-downgrade
+Server: nginx
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Content-Length: 231
+Connection: Close
+
+{
+  "args": {
+    "assignment": "1",
+    "course": "networking"
+  },
+  "headers": {
+    "Host": "httpbin.org"
+  },
+  "origin": "67.218.217.87, 67.218.217.87",
+  "url": "https://httpbin.org/get?course=networking&assignment=1"
+}
+
+POST Request Sample:
+================================================================================================================
+POST /post HTTP/1.0
+Host: localhost
+Content-Type:application/json
+Cache-control:no-cache
+Content-Length: 19
+
+'{"Assignment": 1}'
+
+
+
+HTTP/1.1 200 OK
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Origin: *
+Content-Type: application/json
+Date: Thu, 24 Oct 2019 00:55:52 GMT
+Referrer-Policy: no-referrer-when-downgrade
+Server: nginx
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Content-Length: 301
+Connection: Close
+
+{
+  "args": {},
+  "data": "'{\"Assignment\": 1}'",
+  "files": {},
+  "form": {},
+  "headers": {
+    "Content-Length": "19",
+    "Content-Type": "application/json",
+    "Host": "httpbin.org"
+  },
+  "json": null,
+  "origin": "67.218.217.87, 67.218.217.87",
+  "url": "https://httpbin.org/post"
+}

@@ -1,0 +1,70 @@
+{
+  "args": {
+    "assignment": "1", 
+    "course": "networking"
+  }, 
+  "headers": {
+    "Host": "httpbin.org"
+  }, 
+  "origin": "132.205.229.14, 132.205.229.14", 
+  "url": "https://httpbin.org/get?course=networking&assignment=1"
+}
+HTTP/1.0 301 MOVED PERMANENTLY
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Origin: *
+Referrer-Policy: no-referrer-when-downgrade
+Date: Wed, 23 Oct 2019 19:36:15 GMT
+location: /redirect/1
+Server: nginx
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Content-Length: 0
+Connection: keep-alive
+
+HTTP/1.0 302 FOUND
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Origin: *
+Referrer-Policy: no-referrer-when-downgrade
+Content-Type: text/html; charset=utf-8
+Date: Wed, 23 Oct 2019 19:36:15 GMT
+Location: /get
+Server: nginx
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Content-Length: 215
+Connection: keep-alive
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<title>Redirecting...</title>
+<h1>Redirecting...</h1>
+<p>You should be redirected automatically to target URL: <a href="/get">/get</a>.  If not click the link.HTTP/1.0 200 OK
+Access-Control-Allow-Credentials: true
+Access-Control-Allow-Origin: *
+Referrer-Policy: no-referrer-when-downgrade
+Content-Type: application/json
+Date: Wed, 23 Oct 2019 19:36:15 GMT
+Server: nginx
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+Content-Length: 223
+Connection: keep-alive
+
+{
+  "args": {}, 
+  "headers": {
+    "Cache-Control": "no-cache", 
+    "Content-Type": "application/json", 
+    "Host": "httpbin.org"
+  }, 
+  "origin": "132.205.229.14, 132.205.229.14", 
+  "url": "https://httpbin.org/get"
+}
+POST /hello.txt
+POST /hello.txt
+POST /hello.txt HTTPFS/1.0
+POST /hello.txt HTTPFS/1.0
+POST /hello.txt HTTPFS/1.0
+POST /hello.txt HTTPFS/1.0
