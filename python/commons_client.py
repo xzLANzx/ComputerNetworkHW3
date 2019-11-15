@@ -1,5 +1,7 @@
 from urllib.parse import urlparse
 
+from packet import Packet
+
 
 def get_client_type(command_line):
     command_components = command_line.split()
@@ -198,4 +200,25 @@ def print_help(help_type):
               "\tpost executes a HTTP POST request and prints the response.\r\n"
               "\thelp prints this screen.\r\n"
               "Use \"httpc help [command]\" for more information about a command.")
+
+
+# convert encoded data to packets
+def data_to_packets(data, ip, port):
+    packet_list = []
+
+    # split encoded data into chunks
+    chunk_size = 100
+    data_chunks = [data[i:i + chunk_size] for i in range(0, len(data), chunk_size)]
+
+    # put each data chunk into packet, put each packet into packet_list
+    for i in range(len(data_chunks)):
+        payload = data_chunks[i]
+        # packet_type = 2, DATA Packet
+        p = Packet(packet_type=2,
+                   seq_num=(i % 16),
+                   peer_ip_addr=ip,
+                   peer_port=port,
+                   payload=payload)
+        packet_list.append(p)
+    return packet_list
 
