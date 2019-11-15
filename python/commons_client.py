@@ -204,6 +204,11 @@ def print_help(help_type):
 
 # convert encoded data to packets
 def data_to_packets(data, ip, port):
+
+    # packet_type = 0, SYN
+    # packet_type = 1, SYN-ACK
+    # packet_type = 2, DATA
+
     packet_list = []
 
     # split encoded data into chunks

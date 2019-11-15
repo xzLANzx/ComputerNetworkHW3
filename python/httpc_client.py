@@ -6,49 +6,43 @@ from commons_client import *
 from packet import Packet
 
 
-# def send_request(host, port, request):
-#     try:
-#         conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#         conn.connect((host, port))
-#         conn.sendall(request)
-#
-#         # MSG_WAITALL waits for full request or error
-#         response = conn.recv(4096, socket.MSG_WAITALL)
-#         response = response.decode("utf-8")
-#         return response
-#     finally:
-#         conn.close()
+def sender(routerhost, routerport, packet_list):
+    window_start = 0
+    window_sent = window_start - 1
+    window_size = 8
+    window_end = window_start + window_size
 
-# packet_type = 0, SYN
-# packet_type = 1, SYN-ACK
-# packet_type = 2, DATA
-def send_udp_request(router_addr, router_port, packet_list):
+    # send all the unsent packets in window
+    i = window_sent + 1
+    while i < window_end:
+        send_udp_request(routerhost, routerport, packet_list[i])
+        i = i + 1
+
+
+def send_udp_request(router_addr, router_port, packet):
     conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    timeout = 10
+    timeout = 5
     try:
-        # 0, 1, 2 three-way handshake
-        window_start = 3
-        window_sent = window_start
-        window_size = 8
-
-
-        # send everything in the window
-        for i in range(len(packet_list)):
-            conn.sendto(packet_list[i].to_bytes(), (router_addr, router_port))
-            print('Send "{}" to router'.format(packet_list[i].payload.decode("utf-8")))
+        conn.sendto(packet.to_bytes(), (router_addr, router_port))
+        print('Send packet "{}" to router'.format(packet.seq_num))
 
         # Try to receive a response within timeout
         conn.settimeout(timeout)
-        print('Waiting for a response')
+        print('Waiting for packet {} ack'.format(packet.seq_num))
+
+        # get response, process response
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
-        print('Router: ', sender)
-        print('Packet: ', p)
-        print('Payload: ' + p.payload.decode("utf-8"))
-        return p.payload.decode("utf-8")
+        print('Packet {} correctly acked.'.format(p.seq_num))
+
     except socket.timeout:
         print('No response after {}s'.format(timeout))
+        # resend the request
+        print('Re-send packet {}'.format(packet.seq_num))
+        send_udp_request(router_addr, router_port, packet)
     finally:
+        print('Packet {} connection closed.\n'.format(packet.seq_num))
+        return packet.seq_num
         conn.close()
 
 
@@ -78,7 +72,7 @@ def http_command_loop(routerhost, routerport, serverhost, serverport):
             packet_list = data_to_packets(encoded_request, server_ip, serverport)
 
             # send all the packets to server
-            send_udp_request(routerhost, routerport, packet_list)
+            sender(routerhost, routerport, packet_list)
 
         elif client_type == "httpfs":
             # default local host
