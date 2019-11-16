@@ -34,7 +34,7 @@ def handle_udp_client(conn, data, sender):
         # The peer address of the packet p is the address of the client already.
         # We will send the same payload of p. Thus we can re-use either `data` or `p`.
 
-        # conn.sendto(p.to_bytes(), sender)
+        conn.sendto(p.to_bytes(), sender)
 
     except Exception as e:
         print("Error: ", e)

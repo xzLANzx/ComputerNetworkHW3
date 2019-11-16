@@ -227,3 +227,11 @@ def data_to_packets(data, ip, port):
         packet_list.append(p)
     return packet_list
 
+
+def get_expected_acks_list(window_sent, window_end, packet_list):
+    expected_acks_list = []
+    i = window_sent + 1
+    while i < window_end:
+        expected_acks_list.append(packet_list[i].seq_num)
+        i = i + 1
+    return expected_acks_list

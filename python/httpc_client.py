@@ -2,47 +2,81 @@ import argparse
 import ipaddress
 import socket
 import sys
+import threading
+
 from commons_client import *
 from packet import Packet
 
+# global
+expected_acks_list = []
+un_acked_packets_list = []
+
+window_size = 4
+window_start = 0
+window_sent = window_start - 1
+window_end = window_start + window_size
+
 
 def sender(routerhost, routerport, packet_list):
-    window_start = 0
-    window_sent = window_start - 1
-    window_size = 8
-    window_end = window_start + window_size
+    # send all un-send packets in window
+    global window_sent
+    # while window_sent < window_end - 1:
 
-    # send all the unsent packets in window
     i = window_sent + 1
     while i < window_end:
-        send_udp_request(routerhost, routerport, packet_list[i])
+        global expected_acks_list, un_acked_packets_list
+        expected_acks_list.append(packet_list[i].seq_num)
+        un_acked_packets_list.append(packet_list[i])
+        threading.Thread(target=send_single_udp_packet, args=(routerhost, routerport, packet_list[i])).start()
         i = i + 1
+        window_sent = window_sent + 1
 
 
-def send_udp_request(router_addr, router_port, packet):
-    conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    timeout = 5
+def send_single_udp_packet(router_addr, router_port, packet):
     try:
+        timeout = 2
+        conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         conn.sendto(packet.to_bytes(), (router_addr, router_port))
-        print('Send packet "{}" to router'.format(packet.seq_num))
+        print('Send packet "{}" to router.'.format(packet.seq_num))
 
-        # Try to receive a response within timeout
         conn.settimeout(timeout)
-        print('Waiting for packet {} ack'.format(packet.seq_num))
+        print('Waiting for packet {} ack.'.format(packet.seq_num))
 
-        # get response, process response
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
-        print('Packet {} correctly acked.'.format(p.seq_num))
+
+        if p.seq_num == un_acked_packets_list[0].seq_num:
+            expected_acks_list[0] = -1
+
+            # count the num of acked packets
+            acked_count = 0
+            while acked_count < len(expected_acks_list) and expected_acks_list[acked_count] == -1:
+                acked_count = acked_count + 1
+
+            # update the expected_acks_list and unacked_packets_list
+            counter = acked_count
+            while counter > 0:
+                expected_acks_list.pop(0)
+                un_acked_packets_list.pop(0)
+                counter = counter - 1
+            print('Packet {} ~ {} correctly acked.'.format(p.seq_num, (p.seq_num + acked_count - 1) % window_size))
+
+            # shift window
+            global window_start, window_end
+            window_start = window_start + acked_count
+            window_end = window_end + acked_count
+
+        elif p.seq_num != un_acked_packets_list[0].seq_num:
+            # update the un_acked
+            pos = expected_acks_list.index(p.seq_num)
+            expected_acks_list[pos] = -1
+            # print('Packet {} acked'.format(p.seq_num))
 
     except socket.timeout:
-        print('No response after {}s'.format(timeout))
-        # resend the request
-        print('Re-send packet {}'.format(packet.seq_num))
-        send_udp_request(router_addr, router_port, packet)
+        print('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
+        send_single_udp_packet(router_addr, router_port, packet)
     finally:
-        print('Packet {} connection closed.\n'.format(packet.seq_num))
-        return packet.seq_num
+        print('Packet {} Connection closed.\n'.format(packet.seq_num))
         conn.close()
 
 
@@ -73,6 +107,8 @@ def http_command_loop(routerhost, routerport, serverhost, serverport):
 
             # send all the packets to server
             sender(routerhost, routerport, packet_list)
+
+            print("halt")
 
         elif client_type == "httpfs":
             # default local host
