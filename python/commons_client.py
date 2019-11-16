@@ -219,19 +219,16 @@ def data_to_packets(data, ip, port):
     for i in range(len(data_chunks)):
         payload = data_chunks[i]
         # packet_type = 2, DATA Packet
+        # p = Packet(packet_type=2,
+        #            seq_num=(i % 16),
+        #            peer_ip_addr=ip,
+        #            peer_port=port,
+        #            payload=payload)
+
         p = Packet(packet_type=2,
-                   seq_num=(i % 16),
+                   seq_num=i,
                    peer_ip_addr=ip,
                    peer_port=port,
                    payload=payload)
         packet_list.append(p)
     return packet_list
-
-
-def get_expected_acks_list(window_sent, window_end, packet_list):
-    expected_acks_list = []
-    i = window_sent + 1
-    while i < window_end:
-        expected_acks_list.append(packet_list[i].seq_num)
-        i = i + 1
-    return expected_acks_list

@@ -20,19 +20,19 @@ window_end = window_start + window_size
 def sender(routerhost, routerport, packet_list):
     # send all un-send packets in window
     global window_sent
-    # while window_sent < window_end - 1:
+    packets_num = len(packet_list)
+    while window_sent < len(packet_list) - 1:
+        i = window_sent + 1
+        while i < window_end:
+            global expected_acks_list, un_acked_packets_list
+            expected_acks_list.append(packet_list[i].seq_num)
+            un_acked_packets_list.append(packet_list[i])
+            threading.Thread(target=send_single_udp_packet, args=(routerhost, routerport, packet_list[i], packets_num)).start()
+            i = i + 1
+            window_sent = window_sent + 1
 
-    i = window_sent + 1
-    while i < window_end:
-        global expected_acks_list, un_acked_packets_list
-        expected_acks_list.append(packet_list[i].seq_num)
-        un_acked_packets_list.append(packet_list[i])
-        threading.Thread(target=send_single_udp_packet, args=(routerhost, routerport, packet_list[i])).start()
-        i = i + 1
-        window_sent = window_sent + 1
 
-
-def send_single_udp_packet(router_addr, router_port, packet):
+def send_single_udp_packet(router_addr, router_port, packet, packets_num):
     try:
         timeout = 2
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -64,7 +64,8 @@ def send_single_udp_packet(router_addr, router_port, packet):
             # shift window
             global window_start, window_end
             window_start = window_start + acked_count
-            window_end = window_end + acked_count
+            window_end = min(window_end + acked_count, packets_num)
+            print('Window shifts to [{}, {})'.format(window_start, window_end))
 
         elif p.seq_num != un_acked_packets_list[0].seq_num:
             # update the un_acked
@@ -74,7 +75,7 @@ def send_single_udp_packet(router_addr, router_port, packet):
 
     except socket.timeout:
         print('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
-        send_single_udp_packet(router_addr, router_port, packet)
+        send_single_udp_packet(router_addr, router_port, packet, packets_num)
     finally:
         print('Packet {} Connection closed.\n'.format(packet.seq_num))
         conn.close()
