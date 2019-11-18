@@ -1,5 +1,5 @@
+import socket
 from urllib.parse import urlparse
-
 from packet import Packet
 
 
@@ -202,13 +202,13 @@ def print_help(help_type):
               "Use \"httpc help [command]\" for more information about a command.")
 
 
+# packet_type = 0, SYN
+# packet_type = 1, SYN-ACK
+# packet_type = 2, ACK
+# packet_type = 3, DATA
+
 # convert encoded data to packets
 def data_to_packets(data, ip, port):
-
-    # packet_type = 0, SYN
-    # packet_type = 1, SYN-ACK
-    # packet_type = 2, DATA
-
     packet_list = []
 
     # split encoded data into chunks
@@ -218,17 +218,62 @@ def data_to_packets(data, ip, port):
     # put each data chunk into packet, put each packet into packet_list
     for i in range(len(data_chunks)):
         payload = data_chunks[i]
-        # packet_type = 2, DATA Packet
-        # p = Packet(packet_type=2,
-        #            seq_num=(i % 16),
-        #            peer_ip_addr=ip,
-        #            peer_port=port,
-        #            payload=payload)
-
-        p = Packet(packet_type=2,
+        p = Packet(packet_type=3,
                    seq_num=i,
                    peer_ip_addr=ip,
                    peer_port=port,
                    payload=payload)
         packet_list.append(p)
     return packet_list
+
+
+def send_syn_packet(router_addr, router_port, server_ip, server_port):
+    try:
+        timeout = 2
+        conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        syn_packet = Packet(packet_type=0,
+                            seq_num=0,
+                            peer_ip_addr=server_ip,
+                            peer_port=server_port,
+                            payload="".encode('utf-8'))
+        conn.sendto(syn_packet.to_bytes(), (router_addr, router_port))
+        print('Send SYN packet "{}" to router.'.format(syn_packet.seq_num))
+
+        conn.settimeout(timeout)
+        print('Waiting for SYN-ACK packet {}.'.format(syn_packet.seq_num))
+
+        response, sender = conn.recvfrom(1024)
+        p = Packet.from_bytes(response)
+        print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
+        if p.packet_type == 1 and p.seq_num == 0:
+            # SYN-ACK
+            print('Client connection established.')
+            # setup the client establishment flag
+        else:
+            # resend the syn packet
+            send_syn_packet(router_addr, router_port, server_ip, server_port)
+
+    except socket.timeout:
+        print('SYN packet {} no response after {}s.'.format(syn_packet.seq_num, timeout))
+        send_syn_packet(router_addr, router_port, server_ip, server_port)
+    finally:
+        print('SYN Packet 0 Connection closed.\n'.format(syn_packet.seq_num))
+        conn.close()
+
+
+def send_ack_packet(router_addr, router_port, server_ip, server_port):
+    conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    ack_packet = Packet(packet_type=2,
+                        seq_num=1,
+                        peer_ip_addr=server_ip,
+                        peer_port=server_port,
+                        payload="".encode('utf-8'))
+    conn.sendto(ack_packet.to_bytes(), (router_addr, router_port))
+    print('Send ACK packet "{}" to router.'.format(ack_packet.seq_num))
+    conn.close()
+
+
+def three_way_handshake(router_addr, router_port, server_ip, server_port):
+    print('Initializing TCP connection...')
+    send_syn_packet(router_addr, router_port, server_ip, server_port)
+    send_ack_packet(router_addr, router_port, server_ip, server_port)

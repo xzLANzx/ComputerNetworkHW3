@@ -17,7 +17,12 @@ window_sent = window_start - 1
 window_end = window_start + window_size
 
 
-def sender(routerhost, routerport, packet_list):
+def sender(router_addr, router_port, server_ip, server_port, packet_list):
+    # three-way handshake
+    three_way_handshake(router_addr, router_port, server_ip, server_port)
+
+    # send ack together with the first data packet
+    send_ack_packet(router_addr, router_port, server_ip, server_port)
     # send all un-send packets in window
     global window_sent
     packets_num = len(packet_list)
@@ -27,7 +32,7 @@ def sender(routerhost, routerport, packet_list):
             global expected_acks_list, un_acked_packets_list
             expected_acks_list.append(packet_list[i].seq_num)
             un_acked_packets_list.append(packet_list[i])
-            threading.Thread(target=send_single_udp_packet, args=(routerhost, routerport, packet_list[i], packets_num)).start()
+            threading.Thread(target=send_single_udp_packet, args=(router_addr, router_port, packet_list[i], packets_num)).start()
             i = i + 1
             window_sent = window_sent + 1
 
@@ -107,7 +112,7 @@ def http_command_loop(routerhost, routerport, serverhost, serverport):
             packet_list = data_to_packets(encoded_request, server_ip, serverport)
 
             # send all the packets to server
-            sender(routerhost, routerport, packet_list)
+            sender(routerhost, routerport, server_ip, serverport, packet_list)
 
             print("halt")
 

@@ -6,6 +6,8 @@ window_start = 0
 window_size = 8
 window_end = window_start + window_size
 delivered = [None] * window_size
+SYN_received = False
+establishConnection = False
 
 
 def run_udp_server(port):
@@ -24,43 +26,52 @@ def run_udp_server(port):
 def handle_udp_client(conn, data, sender):
     try:
         p = Packet.from_bytes(data)
-        # print("Router: ", sender)
-        # print("Packet: ", p)
-        # print("Payload: ", p.payload.decode("utf-8"))
 
-        # re-construct the packet
-        global delivered, window_start, window_end
-        if p.seq_num == window_start:
-            print('Accept packet {}'.format(p.seq_num))
-            delivered[p.seq_num] = p
+        global establishConnection, SYN_received
+        if p.packet_type == 0 and p.seq_num == 0 and establishConnection is False:
+            # rcv SYN
+            SYN_received = True
+            # send back SYN-ACK
+            p.packet_type = 1
+            conn.sendto(p.to_bytes(), sender)
+        elif p.packet_type == 2 and p.seq_num == 1 and SYN_received is True and establishConnection is False:
+            # rcv ACK
+            print('Server side connection established.')
+            establishConnection = True
+        elif p.packet_type == 3 and establishConnection is True:
+            # receiving data, # re-construct the packet
+            global delivered, window_start, window_end
+            if p.seq_num == window_start:
+                print('Accept packet {}'.format(p.seq_num))
+                delivered[p.seq_num] = p
 
-            i = window_start
-            while i < len(delivered) and delivered[i] is not None:
-                i = i + 1
-            shift = i - window_start
+                i = window_start
+                while i < len(delivered) and delivered[i] is not None:
+                    i = i + 1
+                shift = i - window_start
 
-            print('Shift the window by {}'.format(shift))
-            window_start = window_start + shift
-            window_end = window_end + shift
+                print('Shift the window by {}'.format(shift))
+                window_start = window_start + shift
+                window_end = window_end + shift
 
-            print('Extend the delivered list by {}'.format(shift))
-            extension = [None] * shift
-            delivered.extend(extension)
+                print('Extend the delivered list by {}'.format(shift))
+                extension = [None] * shift
+                delivered.extend(extension)
 
-        elif window_start < p.seq_num < window_end:
-            print('Accept packet {}'.format(p.seq_num))
-            delivered[p.seq_num] = p
-        else:
-            print('Discard packet {}'.format(p.seq_num))
+            elif window_start < p.seq_num < window_end:
+                print('Accept packet {}'.format(p.seq_num))
+                delivered[p.seq_num] = p
+            else:
+                print('Discard packet {}'.format(p.seq_num))
 
-        # process payload
-        # replace the payload in the sent back packet with the new response
-        # send the packets back
+            # process payload
+            # replace the payload in the sent back packet with the new response
+            # send the packets back
 
-        # How to send a reply.
-        # The peer address of the packet p is the address of the client already.
-        # We will send the same payload of p. Thus we can re-use either `data` or `p`.
-        conn.sendto(p.to_bytes(), sender)
+            # How to send a reply.
+            # The peer address of the packet p is the address of the client already.
+            # We will send the same payload of p. Thus we can re-use either `data` or `p`.
+            conn.sendto(p.to_bytes(), sender)
 
     except Exception as e:
         print("Error: ", e)

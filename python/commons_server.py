@@ -230,6 +230,3 @@ def get_response(client_request, ip):
 
     response = response_info + response_body
     return response
-
-
-
