@@ -8,6 +8,8 @@ from dicttoxml import dicttoxml
 import json
 import os
 
+from packet import Packet
+
 
 def get_client_type(client_request):
     client_request = client_request.decode("utf-8")
@@ -104,7 +106,7 @@ def get_error_respose():
     return response
 
 
-def get_file_response(client_request, ip):
+def get_httpfs_response(client_request, ip):
     request_type, path, header = decompose_file_request(client_request)
 
     response = {}
@@ -194,7 +196,7 @@ def get_file_response(client_request, ip):
     return response
 
 
-def get_response(client_request, ip):
+def get_httpc_response(client_request, ip):
     request_type, path_query, protocol, hostname, header_list, data_body = decompose_request(client_request)
 
     response = {}
@@ -230,3 +232,41 @@ def get_response(client_request, ip):
 
     response = response_info + response_body
     return response
+
+
+def get_response(decoded_request, server_ip):
+    try:
+        if decoded_request:
+            # process the request according to client types
+            encoded_request = decoded_request.encode('utf-8')
+            client_type = get_client_type(encoded_request)
+            if client_type == "httpfs":
+                response = get_httpfs_response(encoded_request, server_ip)
+            elif client_type == "httpc":
+                response = get_httpc_response(encoded_request, server_ip)
+
+    except:
+        response = get_error_respose()
+
+    finally:
+        response = response.encode("utf-8")
+        return response
+
+# convert encoded data to packets
+def data_to_packets(data, ip, port):
+    packet_list = []
+
+    # split encoded data into chunks
+    chunk_size = 100
+    data_chunks = [data[i:i + chunk_size] for i in range(0, len(data), chunk_size)]
+
+    # put each data chunk into packet, put each packet into packet_list
+    for i in range(len(data_chunks)):
+        payload = data_chunks[i]
+        p = Packet(packet_type=3,
+                   seq_num=i,
+                   peer_ip_addr=ip,
+                   peer_port=port,
+                   payload=payload)
+        packet_list.append(p)
+    return packet_list

@@ -206,6 +206,7 @@ def print_help(help_type):
 # packet_type = 1, SYN-ACK
 # packet_type = 2, ACK
 # packet_type = 3, DATA
+# packet_type = 4, DATA_END
 
 # convert encoded data to packets
 def data_to_packets(data, ip, port):
@@ -227,15 +228,16 @@ def data_to_packets(data, ip, port):
     return packet_list
 
 
-def send_syn_packet(router_addr, router_port, server_ip, server_port):
+def send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num):
     try:
         timeout = 2
+        msg = str(data_packet_num)
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         syn_packet = Packet(packet_type=0,
                             seq_num=0,
                             peer_ip_addr=server_ip,
                             peer_port=server_port,
-                            payload="".encode('utf-8'))
+                            payload=msg.encode('utf-8'))
         conn.sendto(syn_packet.to_bytes(), (router_addr, router_port))
         print('Send SYN packet "{}" to router.'.format(syn_packet.seq_num))
 
@@ -251,11 +253,11 @@ def send_syn_packet(router_addr, router_port, server_ip, server_port):
             # setup the client establishment flag
         else:
             # resend the syn packet
-            send_syn_packet(router_addr, router_port, server_ip, server_port)
+            send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num)
 
     except socket.timeout:
         print('SYN packet {} no response after {}s.'.format(syn_packet.seq_num, timeout))
-        send_syn_packet(router_addr, router_port, server_ip, server_port)
+        send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num)
     finally:
         print('SYN Packet 0 Connection closed.\n'.format(syn_packet.seq_num))
         conn.close()
@@ -273,7 +275,7 @@ def send_ack_packet(router_addr, router_port, server_ip, server_port):
     conn.close()
 
 
-def three_way_handshake(router_addr, router_port, server_ip, server_port):
+def three_way_handshake(router_addr, router_port, server_ip, server_port, data_packet_num):
     print('Initializing TCP connection...')
-    send_syn_packet(router_addr, router_port, server_ip, server_port)
+    send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num)
     send_ack_packet(router_addr, router_port, server_ip, server_port)
