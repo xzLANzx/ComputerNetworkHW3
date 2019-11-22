@@ -6,10 +6,18 @@ import threading
 from commons_client import *
 from packet import Packet
 
-# global
+# global vars for receiving
+rcv_window_start = 0
+rcv_window_size = 8
+rcv_window_end = rcv_window_start + rcv_window_size
+delivered = [None] * rcv_window_size
+expected_data_packets_num = 0
+received_pkt_count = 0
+received_all = False
+
+# global vars for sending
 expected_acks_list = []
 un_acked_packets_list = []
-
 send_window_size = 8
 send_window_start = 0
 window_sent = send_window_start - 1
@@ -35,6 +43,76 @@ def send_to_server(router_addr, router_port, server_ip, server_port, packet_list
             threading.Thread(target=send_single_udp_packet, args=(router_addr, router_port, packet_list[i], packets_num)).start()
             i = i + 1
             window_sent = window_sent + 1
+
+    receive_from_server()
+
+
+def receive_from_server():
+    conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    conn.bind(('', 41830))
+    try:
+        while True:
+            data, sender = conn.recvfrom(1024)
+            handle_udp_server(conn, data, sender)
+    finally:
+        conn.close()
+
+
+# handling the udp packets from server
+def handle_udp_server(conn, data, sender):
+    try:
+        p = Packet.from_bytes(data)
+
+        global delivered, expected_data_packets_num, received_pkt_count, received_all
+        if p.packet_type == 3:
+            if p.seq_num == 0:
+                expected_data_packets_num = int(p.payload.decode('utf-8'))
+
+            # receiving data, # re-construct the packet
+            global rcv_window_start, rcv_window_end
+            if p.seq_num - 1 == rcv_window_start:
+                print('Accept packet {}'.format(p.seq_num))
+                if delivered[p.seq_num - 1] is None:
+                    received_pkt_count = received_pkt_count + 1
+                delivered[p.seq_num - 1] = p
+
+                i = rcv_window_start
+                while i < len(delivered) and delivered[i] is not None:
+                    i = i + 1
+                shift = i - rcv_window_start
+
+                print('Shift the window by {}'.format(shift))
+                rcv_window_start = rcv_window_start + shift
+                rcv_window_end = rcv_window_end + shift
+
+                print('Extend the delivered list by {}'.format(shift))
+                extension = [None] * shift
+                delivered.extend(extension)
+
+            elif rcv_window_start < p.seq_num - 1 < rcv_window_end:
+                print('Accept packet {}'.format(p.seq_num))
+                if delivered[p.seq_num - 1] is None:
+                    received_pkt_count = received_pkt_count + 1
+                delivered[p.seq_num - 1] = p
+            else:
+                print('Discard packet {}'.format(p.seq_num))
+
+            # send ACK
+            p.packet_type = 2
+            conn.sendto(p.to_bytes(), sender)
+
+            if received_pkt_count == expected_data_packets_num and received_all is False:
+                received_all = True
+                # concatenate the data of all received packets
+                i = 0
+                decoded_response = ''
+                while i < expected_data_packets_num:
+                    decoded_response = decoded_response + delivered[i].payload.decode('utf-8')
+                    i = i + 1
+                print(decoded_response)
+
+    except Exception as e:
+        print("Error: ", e)
 
 
 def send_single_udp_packet(router_addr, router_port, packet, packets_num):
@@ -70,7 +148,7 @@ def send_single_udp_packet(router_addr, router_port, packet, packets_num):
             global send_window_start, send_window_end
             send_window_start = send_window_start + acked_count
             send_window_end = min(send_window_end + acked_count, packets_num)
-            print('Window shifts to [{}, {})'.format(send_window_start, send_window_end))
+            print('Sending window shifts to [{}, {})'.format(send_window_start, send_window_end))
 
         elif p.seq_num != un_acked_packets_list[0].seq_num:
             # update the un_acked

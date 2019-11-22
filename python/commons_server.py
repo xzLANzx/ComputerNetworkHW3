@@ -260,11 +260,19 @@ def data_to_packets(data, ip, port):
     chunk_size = 100
     data_chunks = [data[i:i + chunk_size] for i in range(0, len(data), chunk_size)]
 
+    packets_num = str(len(data_chunks))
+    p = Packet(packet_type=3,
+               seq_num=0,
+               peer_ip_addr=ip,
+               peer_port=port,
+               payload=packets_num.encode('utf-8'))
+    packet_list.append(p)
+
     # put each data chunk into packet, put each packet into packet_list
     for i in range(len(data_chunks)):
         payload = data_chunks[i]
         p = Packet(packet_type=3,
-                   seq_num=i,
+                   seq_num=i + 1,
                    peer_ip_addr=ip,
                    peer_port=port,
                    payload=payload)

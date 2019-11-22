@@ -103,20 +103,17 @@ def handle_udp_client(conn, data, sender):
                 print(encoded_response)
 
                 # send response back
+                # split encoded request to packets ready to be sent
+                packet_list = data_to_packets(encoded_response, p.peer_ip_addr, 41830)
 
-            # process payload
-            # replace the payload in the sent back packet with the new response
-            # send the packets back
-
-            # How to send a reply.
-            # The peer address of the packet p is the address of the client already.
-            # We will send the same payload of p. Thus we can re-use either `data` or `p`.
+                # send all response packets to client
+                send_to_client(sender, packet_list)
 
     except Exception as e:
         print("Error: ", e)
 
 
-def send_to_client(router_addr, router_port, client_ip, client_port, packet_list):
+def send_to_client(sender, packet_list):
     # send all response packets
     global window_sent
     packets_num = len(packet_list)
@@ -126,16 +123,16 @@ def send_to_client(router_addr, router_port, client_ip, client_port, packet_list
             global expected_acks_list, un_acked_packets_list
             expected_acks_list.append(packet_list[i].seq_num)
             un_acked_packets_list.append(packet_list[i])
-            threading.Thread(target=send_single_udp_packet, args=(router_addr, router_port, packet_list[i], packets_num)).start()
+            threading.Thread(target=send_single_udp_packet, args=(sender, packet_list[i], packets_num)).start()
             i = i + 1
             window_sent = window_sent + 1
 
 
-def send_single_udp_packet(router_addr, router_port, packet, packets_num):
+def send_single_udp_packet(sender, packet, packets_num):
     try:
         timeout = 2
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        conn.sendto(packet.to_bytes(), (router_addr, router_port))
+        conn.sendto(packet.to_bytes(), sender)
         print('Send packet "{}" to router.'.format(packet.seq_num))
 
         conn.settimeout(timeout)
@@ -174,7 +171,7 @@ def send_single_udp_packet(router_addr, router_port, packet, packets_num):
 
     except socket.timeout:
         print('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
-        send_single_udp_packet(router_addr, router_port, packet, packets_num)
+        send_single_udp_packet(sender, packet, packets_num)
     finally:
         print('Packet {} Connection closed.\n'.format(packet.seq_num))
         conn.close()
