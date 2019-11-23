@@ -1,8 +1,8 @@
 import argparse
 import socket
 import threading
+import logging
 
-from packet import Packet
 from commons_server import *
 
 # global vars for receiving
@@ -52,13 +52,13 @@ def handle_udp_client(conn, data, sender):
             conn.sendto(p.to_bytes(), sender)
         elif p.packet_type == 2 and p.seq_num == 1 and SYN_received is True and establishConnection is False:
             # rcv ACK
-            print('Server side connection established.')
+            logging.warning('Server side connection established.')
             establishConnection = True
         elif p.packet_type == 3 and establishConnection is True:
             # receiving data, # re-construct the packet
             global delivered, rcv_window_start, rcv_window_end
             if p.seq_num == rcv_window_start:
-                print('Accept packet {}'.format(p.seq_num))
+                logging.warning('Accept packet {}'.format(p.seq_num))
                 if delivered[p.seq_num] is None:
                     received_pkt_count = received_pkt_count + 1
                 delivered[p.seq_num] = p
@@ -68,21 +68,21 @@ def handle_udp_client(conn, data, sender):
                     i = i + 1
                 shift = i - rcv_window_start
 
-                print('Shift the window by {}'.format(shift))
+                logging.warning('Shift the window by {}'.format(shift))
                 rcv_window_start = rcv_window_start + shift
                 rcv_window_end = rcv_window_end + shift
 
-                print('Extend the delivered list by {}'.format(shift))
+                logging.warning('Extend the delivered list by {}'.format(shift))
                 extension = [None] * shift
                 delivered.extend(extension)
 
             elif rcv_window_start < p.seq_num < rcv_window_end:
-                print('Accept packet {}'.format(p.seq_num))
+                logging.warning('Accept packet {}'.format(p.seq_num))
                 if delivered[p.seq_num] is None:
                     received_pkt_count = received_pkt_count + 1
                 delivered[p.seq_num] = p
             else:
-                print('Discard packet {}'.format(p.seq_num))
+                logging.warning('Discard packet {}'.format(p.seq_num))
 
             # send ACK
             p.packet_type = 2
@@ -110,7 +110,7 @@ def handle_udp_client(conn, data, sender):
                 send_to_client(sender, packet_list)
 
     except Exception as e:
-        print("Error: ", e)
+        logging.warning("Error: ", e)
 
 
 def send_to_client(sender, packet_list):
@@ -119,7 +119,7 @@ def send_to_client(sender, packet_list):
     packets_num = len(packet_list)
     while window_sent < len(packet_list) - 1:
         i = window_sent + 1
-        while i < send_window_end:
+        while i < min(send_window_end, packets_num):
             global expected_acks_list, un_acked_packets_list
             expected_acks_list.append(packet_list[i].seq_num)
             un_acked_packets_list.append(packet_list[i])
@@ -133,10 +133,10 @@ def send_single_udp_packet(sender, packet, packets_num):
         timeout = 2
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         conn.sendto(packet.to_bytes(), sender)
-        print('Send packet "{}" to router.'.format(packet.seq_num))
+        logging.warning('Send packet "{}" to router.'.format(packet.seq_num))
 
         conn.settimeout(timeout)
-        print('Waiting for packet {} ack.'.format(packet.seq_num))
+        logging.warning('Waiting for packet {} ack.'.format(packet.seq_num))
 
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
@@ -155,25 +155,24 @@ def send_single_udp_packet(sender, packet, packets_num):
                 expected_acks_list.pop(0)
                 un_acked_packets_list.pop(0)
                 counter = counter - 1
-            print('Packet {} ~ {} correctly acked.'.format(p.seq_num, (p.seq_num + acked_count - 1) % send_window_size))
+            logging.warning('Packet {} ~ {} correctly acked.'.format(p.seq_num, (p.seq_num + acked_count - 1) % send_window_size))
 
             # shift window
             global send_window_start, send_window_end
             send_window_start = send_window_start + acked_count
             send_window_end = min(send_window_end + acked_count, packets_num)
-            print('Window shifts to [{}, {})'.format(send_window_start, send_window_end))
+            logging.warning('Window shifts to [{}, {})'.format(send_window_start, send_window_end))
 
         elif p.seq_num != un_acked_packets_list[0].seq_num:
             # update the un_acked
             pos = expected_acks_list.index(p.seq_num)
             expected_acks_list[pos] = -1
-            # print('Packet {} acked'.format(p.seq_num))
 
     except socket.timeout:
-        print('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
+        logging.warning('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
         send_single_udp_packet(sender, packet, packets_num)
     finally:
-        print('Packet {} Connection closed.\n'.format(packet.seq_num))
+        logging.warning('Packet {} Connection closed.\n'.format(packet.seq_num))
         conn.close()
 
 
