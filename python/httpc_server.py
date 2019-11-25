@@ -92,11 +92,11 @@ def handle_udp_client(conn, data, sender):
             print('Received client\'s close TCP connection request')
             toBeClosed = True
             # ack the FIN request
-            send_fin_ack_packet(sender, p)
+            send_fin_ack_packet(conn, sender, p)
             # TODO: wait for 1 second, send the rest of the data
-            time.sleep(1)
+            # time.sleep(1)
             # send the disconnect request from server
-            four_way_goodbye(sender, p.peer_ip_addr, 41830)
+            # four_way_goodbye(sender, p.peer_ip_addr, 41830)
 
     except Exception as e:
         logging.warning("Error: ", e)

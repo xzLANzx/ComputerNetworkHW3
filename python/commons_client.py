@@ -231,7 +231,7 @@ def print_help(help_type):
 # packet_type = 6, FIN-ACK
 
 # convert encoded data to packets
-def data_to_packets(data, ip, port):
+def data_to_packets(data, server_ip, server_port):
     packet_list = []
 
     # split encoded data into chunks
@@ -243,8 +243,8 @@ def data_to_packets(data, ip, port):
         payload = data_chunks[i]
         p = Packet(packet_type=3,
                    seq_num=i,
-                   peer_ip_addr=ip,
-                   peer_port=port,
+                   peer_ip_addr=server_ip,
+                   peer_port=server_port,
                    payload=payload)
         packet_list.append(p)
     return packet_list
@@ -305,13 +305,16 @@ def three_way_handshake(router_addr, router_port, server_ip, server_port, data_p
     send_ack_packet(router_addr, router_port, server_ip, server_port)
 
 
-def send_fin_packet(sender, fin_packet):
+def send_fin_packet(router_addr, router_port, server_ip, server_port):
     try:
         timeout = 2
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        fin_packet.packet_type = 5
-        fin_packet.seq_num = 0
-        conn.sendto(fin_packet.to_bytes(), sender)
+        fin_packet = Packet(packet_type=5,
+                            seq_num=0,
+                            peer_ip_addr=server_ip,
+                            peer_port=server_port,
+                            payload=''.encode('utf-8'))
+        conn.sendto(fin_packet.to_bytes(), (router_addr, router_port))
         print('Send FIN packet {} to router.'.format(fin_packet.seq_num))
 
         conn.settimeout(timeout)
@@ -329,15 +332,15 @@ def send_fin_packet(sender, fin_packet):
 
     except socket.timeout:
         print('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
-        send_fin_packet(sender, fin_packet)
+        send_fin_packet(router_addr, router_port, server_ip, server_port)
     finally:
         print('FIN Packet 0 Connection closed.\n'.format(fin_packet.seq_num))
         conn.close()
 
 
-def four_way_goodbye(sender, fin_packet):
+def four_way_goodbye(router_addr, router_port, server_ip, server_port):
     print('Client Disconnecting TCP connection...')
-    send_fin_packet(sender, fin_packet)
+    send_fin_packet(router_addr, router_port, server_ip, server_port)
 
 
 def send_last_fin_ack(sender, fin_ack_packet):

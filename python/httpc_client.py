@@ -29,17 +29,19 @@ def send_to_server(router_addr, router_port, server_ip, server_port, packet_list
 
     # receiving response from server
     receive_from_server(router_addr, router_port, server_ip, server_port)
+    # say goodbye
+    four_way_goodbye(router_addr, router_port, server_ip, server_port)
 
 
 def receive_from_server(router_addr, router_port, server_ip, server_port):
     conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     conn.bind(('', 41830))
     try:
-        while True:
+        while received_all is False:
             data, sender = conn.recvfrom(1024)
             handle_udp_server(conn, data, sender)
     finally:
-        print('Client connection closed.')
+        print('Client received all response packets.')
         conn.close()
 
 
