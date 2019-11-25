@@ -1,3 +1,5 @@
+import logging
+import socket
 from urllib import parse
 from time import gmtime, strftime
 from xml.dom import minidom
@@ -9,6 +11,26 @@ import json
 import os
 
 from packet import Packet
+
+# global vars for receiving
+rcv_window_start = 0
+rcv_window_size = 8
+rcv_window_end = rcv_window_start + rcv_window_size
+delivered = [None] * rcv_window_size
+SYN_received = False
+expected_data_packets_num = 0
+received_pkt_count = 0
+received_all = False
+establishConnection = False
+toBeClosed = False
+
+# global vars for sending
+expected_acks_list = []
+un_acked_packets_list = []
+send_window_size = 8
+send_window_start = 0
+window_sent = send_window_start - 1
+send_window_end = send_window_start + send_window_size
 
 
 def get_client_type(client_request):
@@ -244,13 +266,14 @@ def get_response(decoded_request, server_ip):
                 response = get_httpfs_response(encoded_request, server_ip)
             elif client_type == "httpc":
                 response = get_httpc_response(encoded_request, server_ip)
-
+            else:
+                response = get_error_respose()
     except:
         response = get_error_respose()
-
     finally:
         response = response.encode("utf-8")
         return response
+
 
 # convert encoded data to packets
 def data_to_packets(data, ip, port):
@@ -278,3 +301,57 @@ def data_to_packets(data, ip, port):
                    payload=payload)
         packet_list.append(p)
     return packet_list
+
+
+def send_fin_ack_packet(router, packet):
+    try:
+        conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        fin_ack_packet = packet
+        fin_ack_packet.packet_type = 6
+        conn.sendto(fin_ack_packet.to_bytes(), router)
+        print('Send FIN-ACK packet "{}" to router.'.format(fin_ack_packet.seq_num))
+        # it doesn't matter whether the client receive it or not
+        # thus, there no need to resend it
+    except Exception as e:
+        logging.warning("Error: ", e)
+    finally:
+        print('FIN-ACK Packet 0 Connection closed.\n')
+        conn.close()
+
+
+def send_fin_packet(router, client_ip, client_port):
+    try:
+        timeout = 2
+        conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        fin_packet = Packet(packet_type=5,
+                            seq_num=0,
+                            peer_ip_addr=client_ip,
+                            peer_port=client_port,
+                            payload=''.encode('utf-8'))
+        conn.sendto(fin_packet.to_bytes(), router)
+        print('Send FIN packet "{}" to router.'.format(fin_packet.seq_num))
+
+        conn.settimeout(timeout)
+        print('Waiting for FIN-ACK packet {}.'.format(fin_packet.seq_num))
+
+        response, sender = conn.recvfrom(1024)
+        p = Packet.from_bytes(response)
+        print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
+        if p.packet_type == 6 and p.seq_num == 0:
+            # setup the server establishment flag
+            global establishConnection
+            establishConnection = False
+            # TODO: reset all the other global variables
+            print('Server shuts down TCP connection.')
+
+    except socket.timeout:
+        print('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
+        send_fin_packet(router, client_ip, client_port)
+    finally:
+        print('FIN Packet 0 Connection closed.\n')
+        conn.close()
+
+
+def four_way_goodbye(router, client_ip, client_port):
+    print('Server disconnecting TCP connection...')
+    send_fin_packet(router, client_ip, client_port)

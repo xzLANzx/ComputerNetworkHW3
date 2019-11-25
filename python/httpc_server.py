@@ -1,28 +1,9 @@
 import argparse
-import socket
 import threading
 import logging
+import time
 
 from commons_server import *
-
-# global vars for receiving
-rcv_window_start = 0
-rcv_window_size = 8
-rcv_window_end = rcv_window_start + rcv_window_size
-delivered = [None] * rcv_window_size
-SYN_received = False
-expected_data_packets_num = 0
-received_pkt_count = 0
-received_all = False
-establishConnection = False
-
-# global vars for sending
-expected_acks_list = []
-un_acked_packets_list = []
-send_window_size = 8
-send_window_start = 0
-window_sent = send_window_start - 1
-send_window_end = send_window_start + send_window_size
 
 
 def run_udp_server(port):
@@ -33,7 +14,6 @@ def run_udp_server(port):
         while True:
             data, sender = conn.recvfrom(1024)
             handle_udp_client(conn, data, sender)
-            # threading.Thread(target=handle_udp_client, args=(conn, data, sender)).start()
     finally:
         conn.close()
 
@@ -41,8 +21,7 @@ def run_udp_server(port):
 def handle_udp_client(conn, data, sender):
     try:
         p = Packet.from_bytes(data)
-
-        global establishConnection, SYN_received, expected_data_packets_num, received_pkt_count, received_all
+        global establishConnection, toBeClosed, SYN_received, expected_data_packets_num, received_pkt_count, received_all
         if p.packet_type == 0 and p.seq_num == 0 and establishConnection is False:
             # rcv SYN
             SYN_received = True
@@ -108,6 +87,16 @@ def handle_udp_client(conn, data, sender):
 
                 # send all response packets to client
                 send_to_client(sender, packet_list)
+        elif p.packet_type == 5 and establishConnection is True:
+            # receive client's FIN request
+            print('Received client\'s close TCP connection request')
+            toBeClosed = True
+            # ack the FIN request
+            send_fin_ack_packet(sender, p)
+            # TODO: wait for 1 second, send the rest of the data
+            time.sleep(1)
+            # send the disconnect request from server
+            four_way_goodbye(sender, p.peer_ip_addr, 41830)
 
     except Exception as e:
         logging.warning("Error: ", e)
@@ -176,24 +165,6 @@ def send_single_udp_packet(sender, packet, packets_num):
         conn.close()
 
 
-# def run_server(host, port):
-#     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#
-#     try:
-#         listener.bind((host, port))
-#         listener.listen(5)
-#         server_ip = socket.gethostbyname(socket.gethostname())
-#         print('Lan\'s Server(' + server_ip + ') is listening httpc/httpfs request at port', port)
-#
-#         server_ip = socket.gethostbyname(socket.gethostname())
-#
-#         while True:
-#             conn, addr = listener.accept()
-#             threading.Thread(target=handle_client, args=(conn, addr, server_ip)).start()
-#     finally:
-#         listener.close()
-#
-#
 # def handle_client(conn, addr, ip):
 #     """handling httpfs request from port 8080"""
 #     print('New httpfs client from', addr)

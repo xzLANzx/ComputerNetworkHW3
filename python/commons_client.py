@@ -3,6 +3,26 @@ from urllib.parse import urlparse
 from packet import Packet
 
 
+# global vars for receiving
+rcv_window_start = 0
+rcv_window_size = 8
+rcv_window_end = rcv_window_start + rcv_window_size
+delivered = [None] * rcv_window_size
+expected_data_packets_num = 0
+received_pkt_count = 0
+received_all = False
+establishedConnection = False
+toBeClosed = False
+
+# global vars for sending
+expected_acks_list = []
+un_acked_packets_list = []
+send_window_size = 8
+send_window_start = 0
+window_sent = send_window_start - 1
+send_window_end = send_window_start + send_window_size
+
+
 def get_client_type(command_line):
     command_components = command_line.split()
     return command_components[0]
@@ -207,6 +227,8 @@ def print_help(help_type):
 # packet_type = 2, ACK
 # packet_type = 3, DATA
 # packet_type = 4, DATA_END
+# packet_type = 5, FIN
+# packet_type = 6, FIN-ACK
 
 # convert encoded data to packets
 def data_to_packets(data, ip, port):
@@ -250,7 +272,9 @@ def send_syn_packet(router_addr, router_port, server_ip, server_port, data_packe
         if p.packet_type == 1 and p.seq_num == 0:
             # SYN-ACK
             print('Client connection established.')
-            # setup the client establishment flag
+            # TODO: setup the client establishment flag
+            global establishedConnection
+            establishedConnection = True
         else:
             # resend the syn packet
             send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num)
@@ -259,7 +283,7 @@ def send_syn_packet(router_addr, router_port, server_ip, server_port, data_packe
         print('SYN packet {} no response after {}s.'.format(syn_packet.seq_num, timeout))
         send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num)
     finally:
-        print('SYN Packet 0 Connection closed.\n'.format(syn_packet.seq_num))
+        print('SYN Packet 0 Connection closed.\n')
         conn.close()
 
 
@@ -279,3 +303,63 @@ def three_way_handshake(router_addr, router_port, server_ip, server_port, data_p
     print('Initializing TCP connection...')
     send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num)
     send_ack_packet(router_addr, router_port, server_ip, server_port)
+
+
+def send_fin_packet(sender, fin_packet):
+    try:
+        timeout = 2
+        conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        fin_packet.packet_type = 5
+        fin_packet.seq_num = 0
+        conn.sendto(fin_packet.to_bytes(), sender)
+        print('Send FIN packet {} to router.'.format(fin_packet.seq_num))
+
+        conn.settimeout(timeout)
+        print('Waiting for FIN-ACK packet {}.'.format(fin_packet.seq_num))
+
+        response, sender = conn.recvfrom(1024)
+        p = Packet.from_bytes(response)
+        print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
+        if p.packet_type == 6 and p.seq_num == 0:
+            # FIN-ACK
+            print('Client in Fin waiting state...')
+            # TODO: setup the client establishment flag
+            global toBeClosed
+            toBeClosed = True
+
+    except socket.timeout:
+        print('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
+        send_fin_packet(sender, fin_packet)
+    finally:
+        print('FIN Packet 0 Connection closed.\n'.format(fin_packet.seq_num))
+        conn.close()
+
+
+def four_way_goodbye(sender, fin_packet):
+    print('Client Disconnecting TCP connection...')
+    send_fin_packet(sender, fin_packet)
+
+
+def send_last_fin_ack(sender, fin_ack_packet):
+    try:
+        timeout = 2
+        conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        conn.sendto(fin_ack_packet.to_bytes(), sender)
+        print('Client will close connection if no response from server in {} seconds'.format(timeout))
+        conn.settimeout(timeout)
+
+        response, sender = conn.recvfrom(1024)
+        p = Packet.from_bytes(response)
+        print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
+        if p.packet_type == 5:
+            # FIN-ACK
+            print('Server did not receive the last fin ack, resend...')
+            send_last_fin_ack(conn, sender, fin_ack_packet)
+
+    except socket.timeout:
+        print('No response from server, Client ends TCP connection')
+        global establishedConnection
+        establishedConnection = False
+        # TODO: reset all the global variables
+    finally:
+        conn.close()

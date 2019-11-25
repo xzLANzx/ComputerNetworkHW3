@@ -3,26 +3,8 @@ import ipaddress
 import sys
 import threading
 import logging
-
 from commons_client import *
 from packet import Packet
-
-# global vars for receiving
-rcv_window_start = 0
-rcv_window_size = 8
-rcv_window_end = rcv_window_start + rcv_window_size
-delivered = [None] * rcv_window_size
-expected_data_packets_num = 0
-received_pkt_count = 0
-received_all = False
-
-# global vars for sending
-expected_acks_list = []
-un_acked_packets_list = []
-send_window_size = 8
-send_window_start = 0
-window_sent = send_window_start - 1
-send_window_end = send_window_start + send_window_size
 
 
 def send_to_server(router_addr, router_port, server_ip, server_port, packet_list):
@@ -45,17 +27,19 @@ def send_to_server(router_addr, router_port, server_ip, server_port, packet_list
             i = i + 1
             window_sent = window_sent + 1
 
-    receive_from_server()
+    # receiving response from server
+    receive_from_server(router_addr, router_port, server_ip, server_port)
 
 
-def receive_from_server():
+def receive_from_server(router_addr, router_port, server_ip, server_port):
     conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     conn.bind(('', 41830))
     try:
-        while True and received_all is False:
+        while True:
             data, sender = conn.recvfrom(1024)
             handle_udp_server(conn, data, sender)
     finally:
+        print('Client connection closed.')
         conn.close()
 
 
