@@ -310,13 +310,10 @@ def send_fin_ack_packet(conn, router, packet):
         fin_ack_packet.packet_type = 6
         conn.sendto(fin_ack_packet.to_bytes(), router)
         print('Send FIN-ACK packet {} to router.'.format(fin_ack_packet.seq_num))
-        # it doesn't matter whether the client receive it or not
+        # if the client does not received it, client will request a again
         # thus, there no need to resend it
     except Exception as e:
         logging.warning("Error: ", e)
-    finally:
-        print('FIN-ACK Packet 0 Connection closed.\n')
-        conn.close()
 
 
 def send_fin_packet(router, client_ip, client_port):

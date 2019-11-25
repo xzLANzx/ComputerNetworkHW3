@@ -1,3 +1,4 @@
+import logging
 import socket
 from urllib.parse import urlparse
 from packet import Packet
@@ -305,6 +306,54 @@ def three_way_handshake(router_addr, router_port, server_ip, server_port, data_p
     send_ack_packet(router_addr, router_port, server_ip, server_port)
 
 
+def send_data_packets(router_addr, router_port, packet, packets_num):
+    try:
+        timeout = 2
+        conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        conn.sendto(packet.to_bytes(), (router_addr, router_port))
+        logging.warning('Send packet "{}" to router.'.format(packet.seq_num))
+
+        conn.settimeout(timeout)
+        logging.warning('Waiting for packet {} ack.'.format(packet.seq_num))
+
+        response, sender = conn.recvfrom(1024)
+        p = Packet.from_bytes(response)
+
+        if p.seq_num == un_acked_packets_list[0].seq_num:
+            expected_acks_list[0] = -1
+
+            # count the num of acked packets
+            acked_count = 0
+            while acked_count < len(expected_acks_list) and expected_acks_list[acked_count] == -1:
+                acked_count = acked_count + 1
+
+            # update the expected_acks_list and unacked_packets_list
+            counter = acked_count
+            while counter > 0:
+                expected_acks_list.pop(0)
+                un_acked_packets_list.pop(0)
+                counter = counter - 1
+            logging.warning('Packet {} ~ {} correctly acked.'.format(p.seq_num, (p.seq_num + acked_count - 1) % send_window_size))
+
+            # shift window
+            global send_window_start, send_window_end
+            send_window_start = send_window_start + acked_count
+            send_window_end = min(send_window_end + acked_count, packets_num)
+            logging.warning('Sending window shifts to [{}, {})'.format(send_window_start, send_window_end))
+
+        elif p.seq_num != un_acked_packets_list[0].seq_num:
+            # update the un_acked
+            pos = expected_acks_list.index(p.seq_num)
+            expected_acks_list[pos] = -1
+
+    except socket.timeout:
+        logging.warning('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
+        send_data_packets(router_addr, router_port, packet, packets_num)
+    finally:
+        logging.warning('Packet {} Connection closed.\n'.format(packet.seq_num))
+        conn.close()
+
+
 def send_fin_packet(router_addr, router_port, server_ip, server_port):
     try:
         timeout = 2
@@ -335,6 +384,75 @@ def send_fin_packet(router_addr, router_port, server_ip, server_port):
         send_fin_packet(router_addr, router_port, server_ip, server_port)
     finally:
         print('FIN Packet 0 Connection closed.\n'.format(fin_packet.seq_num))
+        conn.close()
+
+
+# handling the udp packets from server
+def receive_udp_packet_from_server(conn, data, sender):
+    try:
+        p = Packet.from_bytes(data)
+
+        global delivered, expected_data_packets_num, received_pkt_count, received_all
+        if p.packet_type == 3:
+            if p.seq_num == 0:
+                expected_data_packets_num = int(p.payload.decode('utf-8'))
+
+            # receiving data, # re-construct the packet
+            global rcv_window_start, rcv_window_end
+            if p.seq_num - 1 == rcv_window_start:
+                logging.warning('Accept packet {}'.format(p.seq_num))
+                if delivered[p.seq_num - 1] is None:
+                    received_pkt_count = received_pkt_count + 1
+                delivered[p.seq_num - 1] = p
+
+                i = rcv_window_start
+                while i < len(delivered) and delivered[i] is not None:
+                    i = i + 1
+                shift = i - rcv_window_start
+
+                logging.warning('Shift the window by {}'.format(shift))
+                rcv_window_start = rcv_window_start + shift
+                rcv_window_end = rcv_window_end + shift
+
+                logging.warning('Extend the delivered list by {}'.format(shift))
+                extension = [None] * shift
+                delivered.extend(extension)
+
+            elif rcv_window_start < p.seq_num - 1 < rcv_window_end:
+                logging.warning('Accept packet {}'.format(p.seq_num))
+                if delivered[p.seq_num - 1] is None:
+                    received_pkt_count = received_pkt_count + 1
+                delivered[p.seq_num - 1] = p
+            else:
+                logging.warning('Discard packet {}'.format(p.seq_num))
+
+            # send ACK
+            p.packet_type = 2
+            conn.sendto(p.to_bytes(), sender)
+
+            if received_pkt_count == expected_data_packets_num and received_all is False:
+                received_all = True
+                # concatenate the data of all received packets
+                i = 0
+                decoded_response = ''
+                while i < expected_data_packets_num:
+                    decoded_response = decoded_response + delivered[i].payload.decode('utf-8')
+                    i = i + 1
+                print(decoded_response)
+
+    except Exception as e:
+        logging.warning("Error: ", e)
+
+
+def receive_from_server(router_addr, router_port, server_ip, server_port):
+    conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    conn.bind(('', 41830))
+    try:
+        while received_all is False:
+            data, sender = conn.recvfrom(1024)
+            receive_udp_packet_from_server(conn, data, sender)
+    finally:
+        print('Client received all response packets.')
         conn.close()
 
 

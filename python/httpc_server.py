@@ -94,7 +94,7 @@ def handle_udp_client(conn, data, sender):
             # ack the FIN request
             send_fin_ack_packet(conn, sender, p)
             # TODO: wait for 1 second, send the rest of the data
-            # time.sleep(1)
+            time.sleep(1)
             # send the disconnect request from server
             # four_way_goodbye(sender, p.peer_ip_addr, 41830)
 
