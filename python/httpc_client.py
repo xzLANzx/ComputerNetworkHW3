@@ -21,14 +21,16 @@ def send_to_server(router_addr, router_port, server_ip, server_port, packet_list
             global expected_acks_list, un_acked_packets_list
             expected_acks_list.append(packet_list[i].seq_num)
             un_acked_packets_list.append(packet_list[i])
-            threading.Thread(target=send_data_packets, args=(router_addr, router_port, packet_list[i], packets_num)).start()
+            threading.Thread(target=send_data_packet_to_server, args=(router_addr, router_port, packet_list[i], packets_num)).start()
             i = i + 1
             window_sent = window_sent + 1
 
     # receiving response from server
-    receive_from_server(router_addr, router_port, server_ip, server_port)
+    receive_from_server()
     # say goodbye
     four_way_goodbye(router_addr, router_port, server_ip, server_port)
+    # wait for the last disconnect FIN request from server
+    wait_for_server_disconnect()
 
 
 def http_command_loop(routerhost, routerport, serverhost, serverport):

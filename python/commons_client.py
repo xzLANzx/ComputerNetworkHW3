@@ -12,8 +12,9 @@ delivered = [None] * rcv_window_size
 expected_data_packets_num = 0
 received_pkt_count = 0
 received_all = False
-establishedConnection = False
-toBeClosed = False
+established_connection = False
+to_be_closed = False
+to_be_closed_confirmed = False
 
 # global vars for sending
 expected_acks_list = []
@@ -274,8 +275,8 @@ def send_syn_packet(router_addr, router_port, server_ip, server_port, data_packe
             # SYN-ACK
             print('Client connection established.')
             # TODO: setup the client establishment flag
-            global establishedConnection
-            establishedConnection = True
+            global established_connection
+            established_connection = True
         else:
             # resend the syn packet
             send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num)
@@ -306,7 +307,7 @@ def three_way_handshake(router_addr, router_port, server_ip, server_port, data_p
     send_ack_packet(router_addr, router_port, server_ip, server_port)
 
 
-def send_data_packets(router_addr, router_port, packet, packets_num):
+def send_data_packet_to_server(router_addr, router_port, packet, packets_num):
     try:
         timeout = 2
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -348,7 +349,7 @@ def send_data_packets(router_addr, router_port, packet, packets_num):
 
     except socket.timeout:
         logging.warning('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
-        send_data_packets(router_addr, router_port, packet, packets_num)
+        send_data_packet_to_server(router_addr, router_port, packet, packets_num)
     finally:
         logging.warning('Packet {} Connection closed.\n'.format(packet.seq_num))
         conn.close()
@@ -373,11 +374,11 @@ def send_fin_packet(router_addr, router_port, server_ip, server_port):
         p = Packet.from_bytes(response)
         print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
         if p.packet_type == 6 and p.seq_num == 0:
+            global to_be_closed
+            to_be_closed = True
+            # TODO: reset all the other global variables
             # FIN-ACK
             print('Client in Fin waiting state...')
-            # TODO: setup the client establishment flag
-            global toBeClosed
-            toBeClosed = True
 
     except socket.timeout:
         print('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
@@ -444,7 +445,7 @@ def receive_udp_packet_from_server(conn, data, sender):
         logging.warning("Error: ", e)
 
 
-def receive_from_server(router_addr, router_port, server_ip, server_port):
+def receive_from_server():
     conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     conn.bind(('', 41830))
     try:
@@ -454,6 +455,31 @@ def receive_from_server(router_addr, router_port, server_ip, server_port):
     finally:
         print('Client received all response packets.')
         conn.close()
+
+
+def wait_for_server_disconnect():
+    conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    conn.bind(('', 41830))
+    try:
+        while to_be_closed is True:
+            data, sender = conn.recvfrom(1024)
+            wait_for_fin(conn, data, sender)
+    finally:
+        print('Client received the server\'s FIN.')
+        conn.close()
+
+
+def wait_for_fin(conn, data, sender):
+    try:
+        p = Packet.from_bytes(data)
+        if p.packet_type == 5:
+            p.packet_type = 6
+            conn.sendto(p.to_bytes(), sender)
+            global to_be_closed_confirmed
+            to_be_closed_confirmed = True
+            print('Client to be closed confirmed.')
+    except Exception as e:
+        logging.warning("Error: ", e)
 
 
 def four_way_goodbye(router_addr, router_port, server_ip, server_port):
@@ -479,8 +505,8 @@ def send_last_fin_ack(sender, fin_ack_packet):
 
     except socket.timeout:
         print('No response from server, Client ends TCP connection')
-        global establishedConnection
-        establishedConnection = False
+        global established_connection
+        established_connection = False
         # TODO: reset all the global variables
     finally:
         conn.close()
