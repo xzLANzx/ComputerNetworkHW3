@@ -23,7 +23,7 @@ SYN_received = False
 expected_data_packets_num = 0
 received_pkt_count = 0
 received_all = False
-establishConnection = False
+establish_connection = False
 to_be_closed = False
 
 # global vars for sending
@@ -280,19 +280,19 @@ def get_response(decoded_request, server_ip):
 def receive_udp_packet(conn, data, sender):
     try:
         p = Packet.from_bytes(data)
-        global establishConnection, to_be_closed, SYN_received, expected_data_packets_num, received_pkt_count, received_all
-        if p.packet_type == 0 and p.seq_num == 0 and establishConnection is False:
+        global establish_connection, to_be_closed, SYN_received, expected_data_packets_num, received_pkt_count, received_all
+        if p.packet_type == 0 and p.seq_num == 0 and establish_connection is False:
             # rcv SYN
             SYN_received = True
             expected_data_packets_num = int(p.payload.decode('utf-8'))
             # send back SYN-ACK
             p.packet_type = 1
             conn.sendto(p.to_bytes(), sender)
-        elif p.packet_type == 2 and p.seq_num == 1 and SYN_received is True and establishConnection is False:
+        elif p.packet_type == 2 and p.seq_num == 1 and SYN_received is True and establish_connection is False:
             # rcv ACK
             logging.warning('Server side connection established.')
-            establishConnection = True
-        elif p.packet_type == 3 and establishConnection is True:
+            establish_connection = True
+        elif p.packet_type == 3 and establish_connection is True:
             # receiving data, # re-construct the packet
             global delivered, rcv_window_start, rcv_window_end
             if p.seq_num == rcv_window_start:
@@ -346,10 +346,10 @@ def receive_udp_packet(conn, data, sender):
 
                 # send all response packets to client
                 send_to_client(sender, packet_list)
-        elif p.packet_type == 5 and establishConnection is True:
+        elif p.packet_type == 5 and establish_connection is True:
             # receive client's FIN request
             print('Received client\'s close TCP connection request')
-            toBeClosed = True
+            to_be_closed = True
             # ack the FIN request
             send_fin_ack_packet(conn, sender, p)
             # wait for 1 second, send the rest of the data
@@ -418,7 +418,8 @@ def send_data_packet_to_client(sender, packet, packets_num):
 
     except socket.timeout:
         logging.warning('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
-        send_data_packet_to_client(sender, packet, packets_num)
+        if establish_connection:
+            send_data_packet_to_client(sender, packet, packets_num)
     finally:
         logging.warning('Packet {} Connection closed.\n'.format(packet.seq_num))
         conn.close()
@@ -485,15 +486,16 @@ def send_fin_packet(router, client_ip, client_port):
         print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
         if p.packet_type == 6 and p.seq_num == 0:
             # setup the server establishment flag
-            global establishConnection
-            establishConnection = False
+            global establish_connection
+            establish_connection = False
             # TODO: reset all the other global variables
             # FIN-ACK
             print('Server shuts down TCP connection.')
 
     except socket.timeout:
         print('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
-        send_fin_packet(router, client_ip, client_port)
+        if establish_connection:
+            send_fin_packet(router, client_ip, client_port)
     finally:
         print('FIN Packet 0 Connection closed.\n')
         conn.close()

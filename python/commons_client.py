@@ -460,12 +460,19 @@ def receive_from_server():
 def wait_for_server_disconnect():
     conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     conn.bind(('', 41830))
+    global to_be_closed_confirmed
+    timeout = 2
     try:
         while to_be_closed is True:
             data, sender = conn.recvfrom(1024)
             wait_for_fin(conn, data, sender)
+            if to_be_closed_confirmed is True:
+                to_be_closed_confirmed = False
+                conn.settimeout(timeout)
+    except socket.timeout:
+        print('Nothing received from server in {} seconds'.format(timeout))
     finally:
-        print('Client received the server\'s FIN.')
+        print('Client TCP connection closed.')
         conn.close()
 
 
