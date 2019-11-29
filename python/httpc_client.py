@@ -1,36 +1,7 @@
 import argparse
 import ipaddress
 import sys
-import threading
 from commons_client import *
-
-
-def send_to_server(router_addr, router_port, server_ip, server_port, packet_list):
-    # three-way handshake
-    data_packet_num = len(packet_list)
-    three_way_handshake(router_addr, router_port, server_ip, server_port, data_packet_num)
-
-    # send ack together with the first data packet
-    send_ack_packet(router_addr, router_port, server_ip, server_port)
-    # send all un-send packets in window
-    global window_sent
-    packets_num = len(packet_list)
-    while window_sent < len(packet_list) - 1:
-        i = window_sent + 1
-        while i < min(send_window_end, packets_num):
-            global expected_acks_list, un_acked_packets_list
-            expected_acks_list.append(packet_list[i].seq_num)
-            un_acked_packets_list.append(packet_list[i])
-            threading.Thread(target=send_data_packet_to_server, args=(router_addr, router_port, packet_list[i], packets_num)).start()
-            i = i + 1
-            window_sent = window_sent + 1
-
-    # receiving response from server
-    receive_from_server()
-    # say goodbye
-    four_way_goodbye(router_addr, router_port, server_ip, server_port)
-    # wait for the last disconnect FIN request from server
-    wait_for_server_disconnect()
 
 
 def http_command_loop(routerhost, routerport, serverhost, serverport):

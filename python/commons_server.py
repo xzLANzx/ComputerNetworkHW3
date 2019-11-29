@@ -35,6 +35,30 @@ window_sent = send_window_start - 1
 send_window_end = send_window_start + send_window_size
 
 
+def reset_all_global():
+    global rcv_window_start, rcv_window_end, delivered, SYN_received, \
+        expected_data_packets_num, received_pkt_count, received_all, \
+        establish_connection, to_be_closed, expected_acks_list, \
+        un_acked_packets_list, send_window_start, window_sent, send_window_end
+
+    rcv_window_start = 0
+    rcv_window_end = rcv_window_start + rcv_window_size
+    delivered = [None] * rcv_window_size
+    SYN_received = False
+    expected_data_packets_num = 0
+    received_pkt_count = 0
+    received_all = False
+    establish_connection = False
+    to_be_closed = False
+
+    # global vars for sending
+    expected_acks_list = []
+    un_acked_packets_list = []
+    send_window_start = 0
+    window_sent = send_window_start - 1
+    send_window_end = send_window_start + send_window_size
+
+
 def get_client_type(client_request):
     client_request = client_request.decode("utf-8")
     components = client_request.split()
@@ -489,6 +513,7 @@ def send_fin_packet(router, client_ip, client_port):
             global establish_connection
             establish_connection = False
             # TODO: reset all the other global variables
+            reset_all_global()
             # FIN-ACK
             print('Server shuts down TCP connection.')
 
