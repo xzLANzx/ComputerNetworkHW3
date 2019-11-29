@@ -1,18 +1,18 @@
 import logging
 import socket
 import threading
-import time
-from urllib import parse
-from time import gmtime, strftime
-from xml.dom import minidom
-
-from lxml import etree, html
-from json2html import *
-from dicttoxml import dicttoxml
 import json
 import os
 
+from urllib import parse
+from time import gmtime, strftime
+from xml.dom import minidom
+from lxml import etree, html
+from json2html import *
+from dicttoxml import dicttoxml
 from packet import Packet
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 # global vars for receiving
 rcv_window_start = 0
@@ -403,7 +403,7 @@ def send_to_client(sender, packet_list):
 
 def send_data_packet_to_client(sender, packet, packets_num):
     try:
-        timeout = 2
+        timeout = 0.1
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         conn.sendto(packet.to_bytes(), sender)
         logging.debug('Send packet "{}" to router.'.format(packet.seq_num))
@@ -493,7 +493,7 @@ def send_fin_ack_packet(conn, router, packet):
 
 def send_fin_packet(router, client_ip, client_port):
     try:
-        timeout = 2
+        timeout = 0.1
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         fin_packet = Packet(packet_type=5,
                             seq_num=0,
@@ -527,7 +527,6 @@ def send_fin_packet(router, client_ip, client_port):
         logging.debug('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
         if establish_connection:
             send_fin_packet(router, client_ip, client_port)
-
 
 
 def four_way_goodbye(router, client_ip, client_port):

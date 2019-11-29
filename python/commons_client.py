@@ -71,7 +71,7 @@ def parse_httpfs_command(command_line):
         index = command_components.index("-h")
         header = command_components[index + 1]
 
-    port = 8080
+    port = 8007
     if "-p" in command_components:
         index = command_components.index("-p")
         port = int(command_components[index + 1])
@@ -315,7 +315,7 @@ def send_to_server(router_addr, router_port, server_ip, server_port, packet_list
 
 def send_syn_packet(router_addr, router_port, server_ip, server_port, data_packet_num):
     try:
-        timeout = 2
+        timeout = 0.1
         msg = str(data_packet_num)
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         syn_packet = Packet(packet_type=0,
@@ -366,7 +366,7 @@ def three_way_handshake(router_addr, router_port, server_ip, server_port, data_p
 
 def send_data_packet_to_server(router_addr, router_port, packet, packets_num):
     try:
-        timeout = 2
+        timeout = 0.1
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         conn.sendto(packet.to_bytes(), (router_addr, router_port))
         logging.debug('Send data packet "{}" to router.'.format(packet.seq_num))
@@ -416,7 +416,7 @@ def send_data_packet_to_server(router_addr, router_port, packet, packets_num):
 
 def send_fin_packet(router_addr, router_port, server_ip, server_port):
     try:
-        timeout = 2
+        timeout = 0.1
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         fin_packet = Packet(packet_type=5,
                             seq_num=0,
@@ -522,7 +522,7 @@ def wait_for_server_disconnect():
     conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     conn.bind(('', 41830))
     global to_be_closed_confirmed
-    timeout = 2
+    timeout = 0.1
     try:
         while to_be_closed is True:
             data, sender = conn.recvfrom(1024)
