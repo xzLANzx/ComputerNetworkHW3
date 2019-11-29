@@ -1,9 +1,11 @@
 import logging
 import socket
+import sys
 import threading
 from urllib.parse import urlparse
 from packet import Packet
 
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 # global vars for receiving
 rcv_window_start = 0
@@ -367,10 +369,10 @@ def send_data_packet_to_server(router_addr, router_port, packet, packets_num):
         timeout = 2
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         conn.sendto(packet.to_bytes(), (router_addr, router_port))
-        logging.warning('Send packet "{}" to router.'.format(packet.seq_num))
+        logging.debug('Send data packet "{}" to router.'.format(packet.seq_num))
 
         conn.settimeout(timeout)
-        logging.warning('Waiting for packet {} ack.'.format(packet.seq_num))
+        logging.debug('Waiting for data packet {} ack.'.format(packet.seq_num))
 
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
@@ -389,13 +391,14 @@ def send_data_packet_to_server(router_addr, router_port, packet, packets_num):
                 expected_acks_list.pop(0)
                 un_acked_packets_list.pop(0)
                 counter = counter - 1
-            logging.warning('Packet {} ~ {} correctly acked.'.format(p.seq_num, (p.seq_num + acked_count - 1) % send_window_size))
+            logging.debug('Packet {} ~ {} correctly acked.'.format(p.seq_num, (p.seq_num + acked_count - 1) % send_window_size))
 
             # shift window
             global send_window_start, send_window_end
             send_window_start = send_window_start + acked_count
             send_window_end = min(send_window_end + acked_count, packets_num)
-            logging.warning('Sending window shifts to [{}, {})'.format(send_window_start, send_window_end))
+
+            logging.debug('Sending window shifts to [{}, {})'.format(send_window_start, send_window_end))
 
         elif p.seq_num != un_acked_packets_list[0].seq_num:
             # update the un_acked
@@ -403,10 +406,11 @@ def send_data_packet_to_server(router_addr, router_port, packet, packets_num):
             expected_acks_list[pos] = -1
 
     except socket.timeout:
-        logging.warning('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
-        send_data_packet_to_server(router_addr, router_port, packet, packets_num)
+        logging.debug('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
+        if established_connection:
+            send_data_packet_to_server(router_addr, router_port, packet, packets_num)
     finally:
-        logging.warning('Packet {} Connection closed.\n'.format(packet.seq_num))
+        logging.debug('Packet {} Connection closed.\n'.format(packet.seq_num))
         conn.close()
 
 
@@ -428,7 +432,7 @@ def send_fin_packet(router_addr, router_port, server_ip, server_port):
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
         print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
-        if p.packet_type == 6 and p.seq_num == 0:
+        if (p.packet_type == 6 or p.packet_type == 5) and p.seq_num == 0:
             global to_be_closed
             to_be_closed = True
             # FIN-ACK
@@ -436,7 +440,8 @@ def send_fin_packet(router_addr, router_port, server_ip, server_port):
 
     except socket.timeout:
         print('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
-        send_fin_packet(router_addr, router_port, server_ip, server_port)
+        if to_be_closed is False:
+            send_fin_packet(router_addr, router_port, server_ip, server_port)
     finally:
         print('FIN Packet 0 Connection closed.\n')
         conn.close()
@@ -455,7 +460,7 @@ def receive_udp_packet_from_server(conn, data, sender):
             # receiving data, # re-construct the packet
             global rcv_window_start, rcv_window_end
             if p.seq_num - 1 == rcv_window_start:
-                logging.warning('Accept packet {}'.format(p.seq_num))
+                logging.debug('Accept packet {}'.format(p.seq_num))
                 if delivered[p.seq_num - 1] is None:
                     received_pkt_count = received_pkt_count + 1
                 delivered[p.seq_num - 1] = p
@@ -465,21 +470,21 @@ def receive_udp_packet_from_server(conn, data, sender):
                     i = i + 1
                 shift = i - rcv_window_start
 
-                logging.warning('Shift the window by {}'.format(shift))
+                logging.debug('Shift the window by {}'.format(shift))
                 rcv_window_start = rcv_window_start + shift
                 rcv_window_end = rcv_window_end + shift
 
-                logging.warning('Extend the delivered list by {}'.format(shift))
+                logging.debug('Extend the delivered list by {}'.format(shift))
                 extension = [None] * shift
                 delivered.extend(extension)
 
             elif rcv_window_start < p.seq_num - 1 < rcv_window_end:
-                logging.warning('Accept packet {}'.format(p.seq_num))
+                logging.debug('Accept packet {}'.format(p.seq_num))
                 if delivered[p.seq_num - 1] is None:
                     received_pkt_count = received_pkt_count + 1
                 delivered[p.seq_num - 1] = p
             else:
-                logging.warning('Discard packet {}'.format(p.seq_num))
+                logging.debug('Discard packet {}'.format(p.seq_num))
 
             # send ACK
             p.packet_type = 2
@@ -496,7 +501,7 @@ def receive_udp_packet_from_server(conn, data, sender):
                 print(decoded_response)
 
     except Exception as e:
-        logging.warning("Error: ", e)
+        logging.debug("Error: ", e)
 
 
 def receive_from_server():
@@ -541,7 +546,7 @@ def wait_for_fin(conn, data, sender):
             to_be_closed_confirmed = True
             print('Client to be closed confirmed.')
     except Exception as e:
-        logging.warning("Error: ", e)
+        logging.debug("Error: ", e)
 
 
 def four_way_goodbye(router_addr, router_port, server_ip, server_port):

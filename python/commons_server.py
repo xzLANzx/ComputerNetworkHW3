@@ -314,13 +314,13 @@ def receive_udp_packet(conn, data, sender):
             conn.sendto(p.to_bytes(), sender)
         elif p.packet_type == 2 and p.seq_num == 1 and SYN_received is True and establish_connection is False:
             # rcv ACK
-            logging.warning('Server side connection established.')
+            logging.debug('Server side connection established.')
             establish_connection = True
         elif p.packet_type == 3 and establish_connection is True:
             # receiving data, # re-construct the packet
             global delivered, rcv_window_start, rcv_window_end
             if p.seq_num == rcv_window_start:
-                logging.warning('Accept packet {}'.format(p.seq_num))
+                logging.debug('Accept packet {}'.format(p.seq_num))
                 if delivered[p.seq_num] is None:
                     received_pkt_count = received_pkt_count + 1
                 delivered[p.seq_num] = p
@@ -330,21 +330,21 @@ def receive_udp_packet(conn, data, sender):
                     i = i + 1
                 shift = i - rcv_window_start
 
-                logging.warning('Shift the window by {}'.format(shift))
+                logging.debug('Shift the window by {}'.format(shift))
                 rcv_window_start = rcv_window_start + shift
                 rcv_window_end = rcv_window_end + shift
 
-                logging.warning('Extend the delivered list by {}'.format(shift))
+                logging.debug('Extend the delivered list by {}'.format(shift))
                 extension = [None] * shift
                 delivered.extend(extension)
 
             elif rcv_window_start < p.seq_num < rcv_window_end:
-                logging.warning('Accept packet {}'.format(p.seq_num))
+                logging.debug('Accept packet {}'.format(p.seq_num))
                 if delivered[p.seq_num] is None:
                     received_pkt_count = received_pkt_count + 1
                 delivered[p.seq_num] = p
             else:
-                logging.warning('Discard packet {}'.format(p.seq_num))
+                logging.debug('Discard packet {}'.format(p.seq_num))
 
             # send ACK
             p.packet_type = 2
@@ -376,13 +376,14 @@ def receive_udp_packet(conn, data, sender):
             to_be_closed = True
             # ack the FIN request
             send_fin_ack_packet(conn, sender, p)
-            # wait for 1 second, send the rest of the data
-            time.sleep(1)
-            # say goodbye to client
+
+            # # wait for 0.5 second, send the rest of the data
+            # time.sleep(0.5)
+            # # say goodbye to client
             four_way_goodbye(sender, p.peer_ip_addr, 41830)
 
     except Exception as e:
-        logging.warning("Error: ", e)
+        logging.debug("Error: ", e)
 
 
 def send_to_client(sender, packet_list):
@@ -405,10 +406,10 @@ def send_data_packet_to_client(sender, packet, packets_num):
         timeout = 2
         conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         conn.sendto(packet.to_bytes(), sender)
-        logging.warning('Send packet "{}" to router.'.format(packet.seq_num))
+        logging.debug('Send packet "{}" to router.'.format(packet.seq_num))
 
         conn.settimeout(timeout)
-        logging.warning('Waiting for packet {} ack.'.format(packet.seq_num))
+        logging.debug('Waiting for packet {} ack.'.format(packet.seq_num))
 
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
@@ -427,13 +428,13 @@ def send_data_packet_to_client(sender, packet, packets_num):
                 expected_acks_list.pop(0)
                 un_acked_packets_list.pop(0)
                 counter = counter - 1
-            logging.warning('Packet {} ~ {} correctly acked.'.format(p.seq_num, (p.seq_num + acked_count - 1) % send_window_size))
+            logging.debug('Packet {} ~ {} correctly acked.'.format(p.seq_num, (p.seq_num + acked_count - 1) % send_window_size))
 
             # shift window
             global send_window_start, send_window_end
             send_window_start = send_window_start + acked_count
             send_window_end = min(send_window_end + acked_count, packets_num)
-            logging.warning('Window shifts to [{}, {})'.format(send_window_start, send_window_end))
+            logging.debug('Window shifts to [{}, {})'.format(send_window_start, send_window_end))
 
         elif p.seq_num != un_acked_packets_list[0].seq_num:
             # update the un_acked
@@ -441,11 +442,11 @@ def send_data_packet_to_client(sender, packet, packets_num):
             expected_acks_list[pos] = -1
 
     except socket.timeout:
-        logging.warning('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
+        logging.debug('Packet {} no response after {}s.'.format(packet.seq_num, timeout))
         if establish_connection:
             send_data_packet_to_client(sender, packet, packets_num)
     finally:
-        logging.warning('Packet {} Connection closed.\n'.format(packet.seq_num))
+        logging.debug('Packet {} Connection closed.\n'.format(packet.seq_num))
         conn.close()
 
 
@@ -487,7 +488,7 @@ def send_fin_ack_packet(conn, router, packet):
         # if the client does not received it, client will request a again
         # thus, there no need to resend it
     except Exception as e:
-        logging.warning("Error: ", e)
+        logging.debug("Error: ", e)
 
 
 def send_fin_packet(router, client_ip, client_port):
@@ -508,6 +509,11 @@ def send_fin_packet(router, client_ip, client_port):
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
         print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
+
+        if p.packet_type == 5 and p.seq_num == 0:
+            p.packet_type = 6
+            conn.sendto(p.to_bytes(), sender)
+
         if p.packet_type == 6 and p.seq_num == 0:
             # setup the server establishment flag
             global establish_connection
@@ -515,15 +521,14 @@ def send_fin_packet(router, client_ip, client_port):
             # TODO: reset all the other global variables
             reset_all_global()
             # FIN-ACK
+            conn.close()
             print('Server shuts down TCP connection.')
 
     except socket.timeout:
         print('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
         if establish_connection:
             send_fin_packet(router, client_ip, client_port)
-    finally:
-        print('FIN Packet 0 Connection closed.\n')
-        conn.close()
+
 
 
 def four_way_goodbye(router, client_ip, client_port):
