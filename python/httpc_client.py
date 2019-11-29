@@ -38,20 +38,20 @@ def http_command_loop(routerhost, routerport, serverhost, serverport):
         packet_list = data_to_packets(encoded_request, server_ip, serverport)
 
         # send all the packets to server
-        send_to_server(routerhost, routerport, server_ip, serverport, packet_list)
+        decoded_response = send_to_server(routerhost, routerport, server_ip, serverport, packet_list)
 
-        # status_code = get_status_code(decoded_response)
-        # print_to_console(decoded_response, verbosity)
-        # print_to_file(output_file_name, decoded_response)
-        #
-        # # process redirection
-        # while status_code == "301" or status_code == "302":
-        #     redirect_path = get_redirect_path(decoded_response)
-        #     encoded_request = construct_request(request_type, header, data, host, redirect_path, query)
-        #     decoded_response = send_udp_request(routerhost, routerport, serverhost, serverport, encoded_request)
-        #     status_code = get_status_code(decoded_response)
-        #     print_to_console(decoded_response, verbosity)
-        #     print_to_file(output_file_name, decoded_response)
+        status_code = get_status_code(decoded_response)
+        print_to_console(decoded_response, verbosity)
+        print_to_file(output_file_name, decoded_response)
+
+        # process redirection
+        while status_code == "301" or status_code == "302":
+            redirect_path = get_redirect_path(decoded_response)
+            encoded_request = construct_request(request_type, header, data, host, redirect_path, query)
+            decoded_response = send_to_server(routerhost, routerport, server_ip, serverport, packet_list)
+            status_code = get_status_code(decoded_response)
+            print_to_console(decoded_response, verbosity)
+            print_to_file(output_file_name, decoded_response)
 
 
 # def http_command_loop():

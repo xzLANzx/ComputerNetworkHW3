@@ -362,7 +362,7 @@ def receive_udp_packet(conn, data, sender):
                 # get response
                 server_ip = socket.gethostbyname(socket.gethostname())
                 encoded_response = get_response(decoded_request, server_ip)
-                print(encoded_response)
+                logging.debug(encoded_response)
 
                 # send response back
                 # split encoded request to packets ready to be sent
@@ -372,7 +372,7 @@ def receive_udp_packet(conn, data, sender):
                 send_to_client(sender, packet_list)
         elif p.packet_type == 5 and establish_connection is True:
             # receive client's FIN request
-            print('Received client\'s close TCP connection request')
+            logging.debug('Received client\'s close TCP connection request')
             to_be_closed = True
             # ack the FIN request
             send_fin_ack_packet(conn, sender, p)
@@ -484,7 +484,7 @@ def send_fin_ack_packet(conn, router, packet):
         fin_ack_packet = packet
         fin_ack_packet.packet_type = 6
         conn.sendto(fin_ack_packet.to_bytes(), router)
-        print('Send FIN-ACK packet {} to router.'.format(fin_ack_packet.seq_num))
+        logging.debug('Send FIN-ACK packet {} to router.'.format(fin_ack_packet.seq_num))
         # if the client does not received it, client will request a again
         # thus, there no need to resend it
     except Exception as e:
@@ -501,14 +501,14 @@ def send_fin_packet(router, client_ip, client_port):
                             peer_port=client_port,
                             payload=''.encode('utf-8'))
         conn.sendto(fin_packet.to_bytes(), router)
-        print('Send FIN packet "{}" to router.'.format(fin_packet.seq_num))
+        logging.debug('Send FIN packet "{}" to router.'.format(fin_packet.seq_num))
 
         conn.settimeout(timeout)
-        print('Waiting for FIN-ACK packet {}.'.format(fin_packet.seq_num))
+        logging.debug('Waiting for FIN-ACK packet {}.'.format(fin_packet.seq_num))
 
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
-        print('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
+        logging.debug('Get type {} packet {}.'.format(p.packet_type, p.seq_num))
 
         if p.packet_type == 5 and p.seq_num == 0:
             p.packet_type = 6
@@ -518,14 +518,13 @@ def send_fin_packet(router, client_ip, client_port):
             # setup the server establishment flag
             global establish_connection
             establish_connection = False
-            # TODO: reset all the other global variables
             reset_all_global()
             # FIN-ACK
             conn.close()
-            print('Server shuts down TCP connection.')
+            logging.debug('Server shuts down TCP connection.')
 
     except socket.timeout:
-        print('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
+        logging.debug('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
         if establish_connection:
             send_fin_packet(router, client_ip, client_port)
 
