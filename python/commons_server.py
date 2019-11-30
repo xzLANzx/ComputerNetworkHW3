@@ -380,7 +380,7 @@ def receive_udp_packet(conn, data, sender):
             # # wait for 0.5 second, send the rest of the data
             # time.sleep(0.5)
             # # say goodbye to client
-            four_way_goodbye(sender, p.peer_ip_addr, 41830)
+            four_way_goodbye(conn, sender, p.peer_ip_addr, 41830)
 
     except Exception as e:
         logging.debug("Error: ", e)
@@ -491,10 +491,10 @@ def send_fin_ack_packet(conn, router, packet):
         logging.debug("Error: ", e)
 
 
-def send_fin_packet(router, client_ip, client_port):
+def send_fin_packet(conn, router, client_ip, client_port):
     try:
         timeout = 0.1
-        conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         fin_packet = Packet(packet_type=5,
                             seq_num=0,
                             peer_ip_addr=client_ip,
@@ -520,15 +520,16 @@ def send_fin_packet(router, client_ip, client_port):
             establish_connection = False
             reset_all_global()
             # FIN-ACK
-            conn.close()
+            # conn.close()
+            conn.settimeout(None)
             logging.debug('Server shuts down TCP connection.')
 
     except socket.timeout:
         logging.debug('FIN packet {} no response after {}s.'.format(fin_packet.seq_num, timeout))
         if establish_connection:
-            send_fin_packet(router, client_ip, client_port)
+            send_fin_packet(conn, router, client_ip, client_port)
 
 
-def four_way_goodbye(router, client_ip, client_port):
+def four_way_goodbye(conn, router, client_ip, client_port):
     print('Server disconnecting TCP connection...')
-    send_fin_packet(router, client_ip, client_port)
+    send_fin_packet(conn, router, client_ip, client_port)

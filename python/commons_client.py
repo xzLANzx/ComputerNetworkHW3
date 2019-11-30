@@ -432,7 +432,7 @@ def send_fin_packet(router_addr, router_port, server_ip, server_port):
         response, sender = conn.recvfrom(1024)
         p = Packet.from_bytes(response)
         logging.debug('Received type {} packet {}.'.format(p.packet_type, p.seq_num))
-        if (p.packet_type == 6 or p.packet_type == 5) and p.seq_num == 0:
+        if (p.packet_type == 6) and p.seq_num == 0:
             global to_be_closed
             to_be_closed = True
             # FIN-ACK
@@ -522,7 +522,7 @@ def wait_for_server_disconnect():
     conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     conn.bind(('', 41830))
     global to_be_closed_confirmed
-    timeout = 0.1
+    timeout = 0.5
     try:
         while to_be_closed is True:
             data, sender = conn.recvfrom(1024)
